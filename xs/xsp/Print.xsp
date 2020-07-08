@@ -48,12 +48,8 @@ _constant()
     Ref<ModelObject> model_object();
     Ref<StaticPrintConfig> config()
         %code%{ RETVAL = &THIS->config(); %};
-    Points copies();
     Clone<BoundingBox> bounding_box();
     
-    Points _shifted_copies()
-        %code%{ RETVAL = THIS->copies(); %};
-
     size_t layer_count();
     Ref<Layer> get_layer(int idx);
 
@@ -70,10 +66,12 @@ _constant()
     Print();
     ~Print();
 
+    Ref<Model> model()
+        %code%{ RETVAL = const_cast<Model*>(&THIS->model()); %};
     Ref<StaticPrintConfig> config()
         %code%{ RETVAL = const_cast<GCodeConfig*>(static_cast<const GCodeConfig*>(&THIS->config())); %};
     Ref<PlaceholderParser> placeholder_parser()
-        %code%{ RETVAL = &THIS->placeholder_parser(); %};
+        %code%{ RETVAL = const_cast<PlaceholderParser*>(&THIS->placeholder_parser()); %};
     Ref<ExtrusionEntityCollection> skirt()
         %code%{ RETVAL = const_cast<ExtrusionEntityCollection*>(&THIS->skirt()); %};
     Ref<ExtrusionEntityCollection> brim()
@@ -100,7 +98,6 @@ _constant()
         %code%{ RETVAL = const_cast<PrintObjectPtrs*>(&THIS->objects()); %};
     Ref<PrintObject> get_object(int idx)
         %code%{ RETVAL = THIS->objects()[idx]; %};
-    void reload_object(int idx);
     size_t object_count()
         %code%{ RETVAL = THIS->objects().size(); %};
 
@@ -141,9 +138,8 @@ _constant()
             }
         %};
         
-    void add_model_object(ModelObject* model_object, int idx = -1);
-    bool apply_config(DynamicPrintConfig* config)
-        %code%{ RETVAL = THIS->apply_config(*config); %};
+    bool apply(Model *model, DynamicPrintConfig* config)
+        %code%{ RETVAL = THIS->apply(*model, *config); %};
     bool has_infinite_skirt();
     std::vector<unsigned int> extruders() const;
     int validate() %code%{ 
@@ -152,9 +148,6 @@ _constant()
                 croak("Configuration is not valid: %s\n", err.c_str()); 
             RETVAL = 1;
         %};
-    Clone<BoundingBox> bounding_box();
-    Clone<BoundingBox> total_bounding_box();
-    Clone<Point>       size() %code%{ RETVAL = THIS->bounding_box().size(); %};
 
     void set_callback_event(int evt) %code%{
         %};

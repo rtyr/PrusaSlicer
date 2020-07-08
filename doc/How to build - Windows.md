@@ -1,24 +1,37 @@
 
+# This how-to is out of date
+
+We have switched to MS Visual Studio 2019.
+
+We don't use MSVS 2013 any more. At the moment we are in the process of creating new pre-built dependency bundles
+and updating this document. In the meantime, you will need to compile the dependencies yourself
+[the same way as before](#building-the-dependencies-package-yourself)
+except with CMake generators for MSVS 2019 instead of 2013.
+
+Thank you for understanding.
+
+---
+
 # Building PrusaSlicer on Microsoft Windows
 
-The currently supported way of building PrusaSlicer on Windows is with CMake and MS Visual Studio 2013.
+~~The currently supported way of building PrusaSlicer on Windows is with CMake and MS Visual Studio 2013.
 You can use the free [Visual Studio 2013 Community Edition](https://www.visualstudio.com/vs/older-downloads/).
-CMake installer can be downloaded from [the official website](https://cmake.org/download/).
+CMake installer can be downloaded from [the official website](https://cmake.org/download/).~~
 
-Building with newer versions of MSVS (2015, 2017) may work too as reported by some of our users.
+~~Building with newer versions of MSVS (2015, 2017) may work too as reported by some of our users.~~
 
 _Note:_ Thanks to [**@supermerill**](https://github.com/supermerill) for testing and inspiration for this guide.
 
 ### Dependencies
 
 On Windows PrusaSlicer is built against statically built libraries.
-We provide a prebuilt package of all the needed dependencies. This package only works on Visual Studio 2013, so if you are using a newer version of Visual Studio, you need to compile the dependencies yourself as per [below](#building-the-dependencies-package-yourself).
+~~We provide a prebuilt package of all the needed dependencies. This package only works on Visual Studio 2013, so~~ if you are using a newer version of Visual Studio, you need to compile the dependencies yourself as per [below](#building-the-dependencies-package-yourself).
 The package comes in a several variants:
 
-  - [64 bit, Release mode only](https://bintray.com/vojtechkral/Slic3r-PE/download_file?file_path=destdir-64.7z) (41 MB, 578 MB unpacked)
-  - [64 bit, Release and Debug mode](https://bintray.com/vojtechkral/Slic3r-PE/download_file?file_path=destdir-64-dev.7z) (88 MB, 1.3 GB unpacked)
-  - [32 bit, Release mode only](https://bintray.com/vojtechkral/Slic3r-PE/download_file?file_path=destdir-32.7z) (38 MB, 520 MB unpacked)
-  - [32 bit, Release and Debug mode](https://bintray.com/vojtechkral/Slic3r-PE/download_file?file_path=destdir-32-dev.7z) (74 MB, 1.1 GB unpacked)
+  - ~~64 bit, Release mode only (41 MB, 578 MB unpacked)~~
+  - ~~64 bit, Release and Debug mode (88 MB, 1.3 GB unpacked)~~
+  - ~~32 bit, Release mode only (38 MB, 520 MB unpacked)~~
+  - ~~32 bit, Release and Debug mode (74 MB, 1.1 GB unpacked)~~
 
 When unsure, use the _Release mode only_ variant, the _Release and Debug_ variant is only needed for debugging & development.
 
@@ -107,3 +120,49 @@ Refer to the CMake scripts inside the `deps` directory to see which dependencies
 
 \*) Specifically, the problem arises when building boost. Boost build tool appends all build options into paths of
 intermediate files, which are not handled correctly by either `b2.exe` or possibly `ninja` (?).
+
+
+# Noob guide (step by step)
+
+Install Visual Studio Community 2019 from
+visualstudio.microsoft.com/vs/
+Select all workload options for C++ 
+
+Install git for Windows from
+gitforwindows.org
+download and run the exe accepting all defaults
+
+download PrusaSlicer-master.zip from github
+I downloaded this to c:\PrusaSlicer and unzipped to c:\PrusaSlicer\PrusaSlicer-master\ so this will be my prefix for all my steps. Substitute your prefix.
+
+Go to the Windows Start Menu and Click on "Visual Studio 2019" folder, then select the ->"x64 Native Tools Command Prompt" to open a command window
+
+cd c:\PrusaSlicer\PrusaSlicer-master\deps
+
+mkdir build
+
+cd build
+
+cmake .. -G "Visual Studio 16 2019" -DDESTDIR="c:\PrusaSlicer\PrusaSlicer-master"
+
+msbuild /m ALL_BUILD.vcxproj // This took 13.5 minutes on my machine: core I7-7700K @ 4.2Ghz with 32GB main memory and 20min on a average laptop
+
+cd c:\PrusaSlicer\PrusaSlicer-master\
+
+mkdir build
+
+cd build
+
+cmake .. -G "Visual Studio 16 2019" -DCMAKE_PREFIX_PATH="c:\PrusaSlicer\PrusaSlicer-master\usr\local"
+
+open Visual Studio for c++ development (VS asks this the first time you start it)
+
+Open->Project/Solution or File->Open->Project/Solution (depending on which dialog comes up first)
+
+click on c:\PrusaSlicer\PrusaSlicer-master\build\PrusaSlicer.sln
+
+Debug->Start Debugging or Debug->Start Without debugging
+PrusaSlicer should start. You're up and running!
+
+
+note: Thanks to @douggorgen for the original guide, as an answer for a issue 

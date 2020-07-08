@@ -21,6 +21,7 @@ bool SVG::open(const char* afilename)
         "      <polyline fill=\"darkblue\" points=\"0,0 10,5 0,10 1,5\" />\n"
         "   </marker>\n"
         );
+    fprintf(this->f, "<rect fill='white' stroke='none' x='0' y='0' width='%f' height='%f'/>\n", 2000.f, 2000.f);
     return true;
 }
 
@@ -42,6 +43,7 @@ bool SVG::open(const char* afilename, const BoundingBox &bbox, const coord_t bbo
         "      <polyline fill=\"darkblue\" points=\"0,0 10,5 0,10 1,5\" />\n"
         "   </marker>\n",
         h, w);
+    fprintf(this->f, "<rect fill='white' stroke='none' x='0' y='0' width='%f' height='%f'/>\n", w, h);
     return true;
 }
 
@@ -368,6 +370,10 @@ void SVG::export_expolygons(const char *path, const std::vector<std::pair<Slic3r
             color_holes = color_contour;
         svg.draw_outline(exp_with_attr.first, color_contour, color_holes, exp_with_attr.second.outline_width);
     }
+    for (const auto &exp_with_attr : expolygons_with_attributes)
+    	if (exp_with_attr.second.radius_points > 0)
+			for (const ExPolygon &expoly : exp_with_attr.first)
+    			svg.draw((Points)expoly, exp_with_attr.second.color_points, exp_with_attr.second.radius_points);
     svg.Close();
 }
 

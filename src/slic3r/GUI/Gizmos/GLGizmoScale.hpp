@@ -3,6 +3,8 @@
 
 #include "GLGizmoBase.hpp"
 
+#include "libslic3r/BoundingBox.hpp"
+
 
 namespace Slic3r {
 namespace GUI {
@@ -32,11 +34,7 @@ class GLGizmoScale3D : public GLGizmoBase
     StartingData m_starting;
 
 public:
-#if ENABLE_SVG_ICONS
     GLGizmoScale3D(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id);
-#else
-    GLGizmoScale3D(GLCanvas3D& parent, unsigned int sprite_id);
-#endif // ENABLE_SVG_ICONS
 
     double get_snap_step(double step) const { return m_snap_step; }
     void set_snap_step(double step) { m_snap_step = step; }
@@ -46,15 +44,16 @@ public:
 
     const Vec3d& get_offset() const { return m_offset; }
 
+    std::string get_tooltip() const override;
+
 protected:
     virtual bool on_init();
     virtual std::string on_get_name() const;
-    virtual bool on_is_activable(const Selection& selection) const { return !selection.is_wipe_tower(); }
-    virtual void on_start_dragging(const Selection& selection);
-    virtual void on_update(const UpdateData& data, const Selection& selection);
-    virtual void on_render(const Selection& selection) const;
-    virtual void on_render_for_picking(const Selection& selection) const;
-    virtual void on_render_input_window(float x, float y, float bottom_limit, const Selection& selection);
+    virtual bool on_is_activable() const;
+    virtual void on_start_dragging();
+    virtual void on_update(const UpdateData& data);
+    virtual void on_render() const;
+    virtual void on_render_for_picking() const;
 
 private:
     void render_grabbers_connection(unsigned int id_1, unsigned int id_2) const;

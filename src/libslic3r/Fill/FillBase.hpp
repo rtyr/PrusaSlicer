@@ -5,41 +5,45 @@
 #include <memory.h>
 #include <float.h>
 #include <stdint.h>
+#include <stdexcept>
 
 #include <type_traits>
 
 #include "../libslic3r.h"
 #include "../BoundingBox.hpp"
-#include "../PrintConfig.hpp"
 #include "../Utils.hpp"
 
 namespace Slic3r {
 
+class ExPolygon;
 class Surface;
+enum InfillPattern : int;
+
+class InfillFailedException : public std::runtime_error {
+public:
+    InfillFailedException() : std::runtime_error("Infill failed") {}
+};
 
 struct FillParams
 {
-    FillParams() { 
-        memset(this, 0, sizeof(FillParams));
-        // Adjustment does not work.
-        dont_adjust = true;
-    }
-
     bool        full_infill() const { return density > 0.9999f; }
 
     // Fill density, fraction in <0, 1>
-    float       density;
+    float       density 		{ 0.f };
 
     // Don't connect the fill lines around the inner perimeter.
-    bool        dont_connect;
+    bool        dont_connect 	{ false };
 
     // Don't adjust spacing to fill the space evenly.
-    bool        dont_adjust;
+    bool        dont_adjust 	{ true };
+
+    // Monotonous infill - strictly left to right for better surface quality of top infills.
+    bool 		monotonous		{ false };
 
     // For Honeycomb.
     // we were requested to complete each loop;
     // in this case we don't try to make more continuous paths
-    bool        complete;
+    bool        complete 		{ false };
 };
 static_assert(IsTriviallyCopyable<FillParams>::value, "FillParams class is not POD (and it should be - see constructor).");
 
@@ -70,6 +74,7 @@ public:
 
     static Fill* new_from_type(const InfillPattern type);
     static Fill* new_from_type(const std::string &type);
+    static bool  use_bridge_flow(const InfillPattern type);
 
     void         set_bounding_box(const Slic3r::BoundingBox &bbox) { bounding_box = bbox; }
 
@@ -110,6 +115,8 @@ protected:
     virtual std::pair<float, Point> _infill_direction(const Surface *surface) const;
 
 public:
+    static void connect_infill(Polylines &&infill_ordered, const ExPolygon &boundary, Polylines &polylines_out, double spacing, const FillParams &params);
+
     static coord_t  _adjust_solid_spacing(const coord_t width, const coord_t distance);
 
     // Align a coordinate to a grid. The coordinate may be negative,

@@ -6,6 +6,7 @@
 
 namespace Slic3r {
 
+class BoundingBox;
 class Line;
 class Line3;
 class Linef3;
@@ -43,6 +44,8 @@ public:
     Vector normal() const { return Vector((this->b(1) - this->a(1)), -(this->b(0) - this->a(0))); }
     bool   intersection(const Line& line, Point* intersection) const;
     double ccw(const Point& point) const { return point.ccw(*this); }
+    // Clip a line with a bounding box. Returns false if the line is completely outside of the bounding box.
+	bool   clip_with_bbox(const BoundingBox &bbox);
 
     static double distance_to_squared(const Point &point, const Point &a, const Point &b);
     static double distance_to(const Point &point, const Point &a, const Point &b) { return sqrt(distance_to_squared(point, a, b)); }
@@ -100,6 +103,8 @@ public:
     Vec3d b;
 };
 
+BoundingBox get_extents(const Lines &lines);
+
 } // namespace Slic3r
 
 // start Boost
@@ -120,4 +125,4 @@ namespace boost { namespace polygon {
 } }
 // end Boost
 
-#endif
+#endif // slic3r_Line_hpp_

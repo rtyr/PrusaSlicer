@@ -2,9 +2,14 @@
 #define slic3r_GLGizmoFlatten_hpp_
 
 #include "GLGizmoBase.hpp"
+#include "slic3r/GUI/3DScene.hpp"
 
 
 namespace Slic3r {
+
+enum class ModelVolumeType : int;
+
+
 namespace GUI {
 
 
@@ -16,7 +21,8 @@ private:
     mutable Vec3d m_normal;
 
     struct PlaneData {
-        std::vector<Vec3d> vertices;
+        std::vector<Vec3d> vertices; // should be in fact local in update_planes()
+        GLIndexedVertexArray vbo;
         Vec3d normal;
         float area;
     };
@@ -30,35 +36,27 @@ private:
     std::vector<PlaneData> m_planes;
     bool m_planes_valid = false;
     mutable Vec3d m_starting_center;
-    const ModelObject* m_model_object = nullptr;
+    const ModelObject* m_old_model_object = nullptr;
     std::vector<const Transform3d*> instances_matrices;
 
     void update_planes();
     bool is_plane_update_necessary() const;
 
 public:
-#if ENABLE_SVG_ICONS
     GLGizmoFlatten(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id);
-#else
-    GLGizmoFlatten(GLCanvas3D& parent, unsigned int sprite_id);
-#endif // ENABLE_SVG_ICONS
 
     void set_flattening_data(const ModelObject* model_object);
     Vec3d get_flattening_normal() const;
 
 protected:
-    virtual bool on_init();
-    virtual std::string on_get_name() const;
-    virtual bool on_is_activable(const Selection& selection) const;
-    virtual void on_start_dragging(const Selection& selection);
-    virtual void on_update(const UpdateData& data, const Selection& selection) {}
-    virtual void on_render(const Selection& selection) const;
-    virtual void on_render_for_picking(const Selection& selection) const;
-    virtual void on_set_state()
-    {
-        if (m_state == On && is_plane_update_necessary())
-            update_planes();
-    }
+    virtual bool on_init() override;
+    virtual std::string on_get_name() const override;
+    virtual bool on_is_activable() const override;
+    virtual void on_start_dragging() override;
+    virtual void on_render() const override;
+    virtual void on_render_for_picking() const override;
+    virtual void on_set_state() override;
+    virtual CommonGizmosDataID on_get_requirements() const override;
 };
 
 } // namespace GUI

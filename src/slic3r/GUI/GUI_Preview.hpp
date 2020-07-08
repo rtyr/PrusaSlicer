@@ -2,9 +2,12 @@
 #define slic3r_GUI_Preview_hpp_
 
 #include <wx/panel.h>
+
 #include "libslic3r/Point.hpp"
+#include "libslic3r/CustomGCode.hpp"
 
 #include <string>
+
 
 class wxNotebook;
 class wxGLCanvas;
@@ -12,8 +15,8 @@ class wxBoxSizer;
 class wxStaticText;
 class wxChoice;
 class wxComboCtrl;
+class wxBitmapComboBox;
 class wxCheckBox;
-class DoubleSlider;
 
 namespace Slic3r {
 
@@ -23,12 +26,17 @@ class BackgroundSlicingProcess;
 class GCodePreviewData;
 class Model;
 
+namespace DoubleSlider {
+    class Control;
+};
+
 namespace GUI {
 
 class GLCanvas3D;
 class GLToolbar;
 class Bed3D;
 struct Camera;
+class Plater;
 
 class View3D : public wxPanel
 {
@@ -36,7 +44,7 @@ class View3D : public wxPanel
     GLCanvas3D* m_canvas;
 
 public:
-    View3D(wxWindow* parent, Bed3D& bed, Camera& camera, GLToolbar& view_toolbar, Model* model, DynamicPrintConfig* config, BackgroundSlicingProcess* process);
+    View3D(wxWindow* parent, Model* model, DynamicPrintConfig* config, BackgroundSlicingProcess* process);
     virtual ~View3D();
 
     wxGLCanvas* get_wxglcanvas() { return m_canvas_widget; }
@@ -64,7 +72,7 @@ public:
     void render();
 
 private:
-    bool init(wxWindow* parent, Bed3D& bed, Camera& camera, GLToolbar& view_toolbar, Model* model, DynamicPrintConfig* config, BackgroundSlicingProcess* process);
+    bool init(wxWindow* parent, Model* model, DynamicPrintConfig* config, BackgroundSlicingProcess* process);
 };
 
 class Preview : public wxPanel
@@ -80,6 +88,7 @@ class Preview : public wxPanel
     wxCheckBox* m_checkbox_retractions;
     wxCheckBox* m_checkbox_unretractions;
     wxCheckBox* m_checkbox_shells;
+    wxCheckBox* m_checkbox_legend;
 
     DynamicPrintConfig* m_config;
     BackgroundSlicingProcess* m_process;
@@ -100,18 +109,19 @@ class Preview : public wxPanel
     bool m_loaded;
     bool m_enabled;
 
-    DoubleSlider* m_slider {nullptr};
+    DoubleSlider::Control*       m_slider {nullptr};
 
 public:
-    Preview(wxWindow* parent, Bed3D& bed, Camera& camera, GLToolbar& view_toolbar, Model* model, DynamicPrintConfig* config, 
-        BackgroundSlicingProcess* process, GCodePreviewData* gcode_preview_data, std::function<void()> schedule_background_process = [](){});
+    Preview(wxWindow* parent, Model* model, DynamicPrintConfig* config,
+        BackgroundSlicingProcess* process, GCodePreviewData* gcode_preview_data, std::function<void()> schedule_background_process = []() {});
     virtual ~Preview();
 
     wxGLCanvas* get_wxglcanvas() { return m_canvas_widget; }
     GLCanvas3D* get_canvas3d() { return m_canvas; }
 
+    void set_as_dirty();
+
     void set_number_extruders(unsigned int number_extruders);
-    void set_canvas_as_dirty();
     void set_enabled(bool enabled);
     void bed_shape_changed();
     void select_view(const std::string& direction);
@@ -122,16 +132,22 @@ public:
     void refresh_print();
 
     void msw_rescale();
+    void move_double_slider(wxKeyEvent& evt);
+    void edit_double_slider(wxKeyEvent& evt);
+
+    void update_view_type(bool slice_completed);
+
+    bool is_loaded() const { return m_loaded; }
 
 private:
-    bool init(wxWindow* parent, Bed3D& bed, Camera& camera, GLToolbar& view_toolbar, Model* model);
+    bool init(wxWindow* parent, Model* model);
 
     void bind_event_handlers();
     void unbind_event_handlers();
 
     void show_hide_ui_elements(const std::string& what);
 
-    void reset_sliders();
+    void reset_sliders(bool reset_all);
     void update_sliders(const std::vector<double>& layers_z, bool keep_z_range = false);
 
     void on_size(wxSizeEvent& evt);
@@ -141,13 +157,15 @@ private:
     void on_checkbox_retractions(wxCommandEvent& evt);
     void on_checkbox_unretractions(wxCommandEvent& evt);
     void on_checkbox_shells(wxCommandEvent& evt);
+    void on_checkbox_legend(wxCommandEvent& evt);
 
     // Create/Update/Reset double slider on 3dPreview
     void create_double_slider();
-    void update_double_slider(const std::vector<double>& layers_z, bool keep_z_range = false);
-    void fill_slider_values(std::vector<std::pair<int, double>> &values,
-                            const std::vector<double> &layers_z);
+    void check_slider_values(std::vector<CustomGCode::Item> &ticks_from_model,
+                             const std::vector<double> &layers_z);
     void reset_double_slider();
+    void update_double_slider(const std::vector<double>& layers_z, bool keep_z_range = false);
+    void update_double_slider_mode();
     // update DoubleSlider after keyDown in canvas
     void update_double_slider_from_canvas(wxKeyEvent& event);
 
@@ -155,7 +173,6 @@ private:
     void load_print_as_sla();
 
     void on_sliders_scroll_changed(wxCommandEvent& event);
-
 };
 
 } // namespace GUI

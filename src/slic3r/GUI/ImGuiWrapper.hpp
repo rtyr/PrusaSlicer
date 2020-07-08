@@ -8,6 +8,10 @@
 
 #include "libslic3r/Point.hpp"
 
+namespace Slic3r {namespace Search {
+struct OptionViewParameters;
+}}
+
 class wxString;
 class wxMouseEvent;
 class wxKeyEvent;
@@ -19,6 +23,8 @@ namespace GUI {
 class ImGuiWrapper
 {
     const ImWchar *m_glyph_ranges;
+    // Chinese, Japanese, Korean
+    bool m_font_cjk;
     float m_font_size;
     unsigned m_font_texture;
     float m_style_scaling;
@@ -49,22 +55,31 @@ public:
     ImVec2 scaled(float x, float y) const { return ImVec2(x * m_font_size, y * m_font_size); }
     ImVec2 calc_text_size(const wxString &text);
 
-    void set_next_window_pos(float x, float y, int flag);
+    void set_next_window_pos(float x, float y, int flag, float pivot_x = 0.0f, float pivot_y = 0.0f);
     void set_next_window_bg_alpha(float alpha);
 
     bool begin(const std::string &name, int flags = 0);
     bool begin(const wxString &name, int flags = 0);
+    bool begin(const std::string& name, bool* close, int flags = 0);
+    bool begin(const wxString& name, bool* close, int flags = 0);
     void end();
 
     bool button(const wxString &label);
     bool radio_button(const wxString &label, bool active);
     bool input_double(const std::string &label, const double &value, const std::string &format = "%.3f");
+    bool input_double(const wxString &label, const double &value, const std::string &format = "%.3f");
     bool input_vec3(const std::string &label, const Vec3d &value, float width, const std::string &format = "%.3f");
     bool checkbox(const wxString &label, bool &value);
     void text(const char *label);
     void text(const std::string &label);
     void text(const wxString &label);
+    bool slider_float(const char* label, float* v, float v_min, float v_max, const char* format = "%.3f", float power = 1.0f);
+    bool slider_float(const std::string& label, float* v, float v_min, float v_max, const char* format = "%.3f", float power = 1.0f);
+    bool slider_float(const wxString& label, float* v, float v_min, float v_max, const char* format = "%.3f", float power = 1.0f);
     bool combo(const wxString& label, const std::vector<std::string>& options, int& selection);   // Use -1 to not mark any option as selected
+    bool undo_redo_list(const ImVec2& size, const bool is_undo, bool (*items_getter)(const bool, int, const char**), int& hovered, int& selected, int& mouse_wheel);
+    void search_list(const ImVec2& size, bool (*items_getter)(int, const char** label, const char** tooltip), char* search_str,
+                     Search::OptionViewParameters& view_params, int& selected, bool& edited, int& mouse_wheel, bool is_localized);
 
     void disabled_begin(bool disabled);
     void disabled_end();
@@ -75,12 +90,13 @@ public:
     bool want_any_input() const;
 
 private:
-    void init_font();
+    void init_font(bool compress);
     void init_input();
     void init_style();
     void render_draw_data(ImDrawData *draw_data);
     bool display_initialized() const;
     void destroy_font();
+    std::vector<unsigned char> load_svg(const std::string& bitmap_name, unsigned target_width, unsigned target_height);
 
     static const char* clipboard_get(void* user_data);
     static void clipboard_set(void* user_data, const char* text);

@@ -1,5 +1,7 @@
+cmake_minimum_required(VERSION 3.8)
 project(PrusaSlicer-native)
 
+add_subdirectory(build-utils)
 add_subdirectory(admesh)
 add_subdirectory(avrdude)
 # boost/nowide
@@ -12,18 +14,17 @@ add_subdirectory(poly2tri)
 add_subdirectory(qhull)
 add_subdirectory(Shiny)
 add_subdirectory(semver)
+add_subdirectory(libigl)
 
 # Adding libnest2d project for bin packing...
-set(LIBNEST2D_UNITTESTS ON CACHE BOOL "Force generating unittests for libnest2d")
 add_subdirectory(libnest2d)
-
-include_directories(${LIBDIR}/qhull/src)
-#message(STATUS ${LIBDIR}/qhull/src)
 
 add_subdirectory(libslic3r)
 
 if (SLIC3R_GUI)
     add_subdirectory(imgui)
+    add_subdirectory(hidapi)
+    include_directories(hidapi/include)
 
     if(WIN32)
         message(STATUS "WXWIN environment set to: $ENV{WXWIN}")
@@ -49,7 +50,7 @@ if (SLIC3R_GUI)
             endif ()
         endif ()
     else ()
-        find_package(wxWidgets 3.1 REQUIRED COMPONENTS base core adv html gl)
+        find_package(wxWidgets 3.1 REQUIRED COMPONENTS html adv gl core base)
     endif ()
 
     if(UNIX)
@@ -57,6 +58,32 @@ if (SLIC3R_GUI)
     endif()
 
     include(${wxWidgets_USE_FILE})
+
+    string(REGEX MATCH "wxpng" WX_PNG_BUILTIN ${wxWidgets_LIBRARIES})
+    if (PNG_FOUND AND NOT WX_PNG_BUILTIN)
+        list(FILTER wxWidgets_LIBRARIES EXCLUDE REGEX png)
+        list(APPEND wxWidgets_LIBRARIES ${PNG_LIBRARIES})
+    endif ()
+
+    string(REGEX MATCH "wxexpat" WX_EXPAT_BUILTIN ${wxWidgets_LIBRARIES})
+    if (EXPAT_FOUND AND NOT WX_EXPAT_BUILTIN)
+        list(FILTER wxWidgets_LIBRARIES EXCLUDE REGEX expat)
+        list(APPEND wxWidgets_LIBRARIES ${EXPAT_LIBRARIES})
+    endif ()
+
+    # This is an issue in the new wxWidgets cmake build, doesn't deal with librt
+    find_library(LIBRT rt)
+    if(LIBRT)
+        list(APPEND wxWidgets_LIBRARIES ${LIBRT})
+    endif()
+
+    # This fixes a OpenGL linking issue on OSX. wxWidgets cmake build includes
+    # wrong libs for opengl in the link line and it does not link to it by himself.
+    # libslic3r_gui will link to opengl anyway, so lets override wx
+    list(FILTER wxWidgets_LIBRARIES EXCLUDE REGEX OpenGL)
+
+#    list(REMOVE_ITEM wxWidgets_LIBRARIES oleacc)
+    message(STATUS "wx libs: ${wxWidgets_LIBRARIES}")
 
     add_subdirectory(slic3r)
 endif()
@@ -67,17 +94,23 @@ endif()
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/platform/msw/PrusaSlicer.rc.in ${CMAKE_CURRENT_BINARY_DIR}/PrusaSlicer.rc @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/platform/msw/PrusaSlicer.manifest.in ${CMAKE_CURRENT_BINARY_DIR}/PrusaSlicer.manifest @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/platform/osx/Info.plist.in ${CMAKE_CURRENT_BINARY_DIR}/Info.plist @ONLY)
-if (MSVC)
+if (WIN32)
     add_library(PrusaSlicer SHARED PrusaSlicer.cpp PrusaSlicer.hpp)
 else ()
     add_executable(PrusaSlicer PrusaSlicer.cpp PrusaSlicer.hpp)
 endif ()
-if (NOT MSVC)
+
+if (MINGW)
+    target_link_options(PrusaSlicer PUBLIC "-Wl,-allow-multiple-definition")
+    set_target_properties(PrusaSlicer PROPERTIES PREFIX "")
+endif (MINGW)
+
+if (NOT WIN32)
     # Binary name on unix like systems (OSX, Linux)
-    set_target_properties(PrusaSlicer PROPERTIES OUTPUT_NAME "prusa-slicer")
+   set_target_properties(PrusaSlicer PROPERTIES OUTPUT_NAME "prusa-slicer")
 endif ()
 
-target_link_libraries(PrusaSlicer libslic3r)
+target_link_libraries(PrusaSlicer libslic3r cereal)
 if (APPLE)
 #    add_compile_options(-stdlib=libc++)
 #    add_definitions(-DBOOST_THREAD_DONT_USE_CHRONO -DBOOST_NO_CXX11_RVALUE_REFERENCES -DBOOST_THREAD_USES_MOVE)
@@ -93,66 +126,51 @@ endif ()
 
 # Add the Slic3r GUI library, libcurl, OpenGL and GLU libraries.
 if (SLIC3R_GUI)
-    target_link_libraries(PrusaSlicer libslic3r_gui ${wxWidgets_LIBRARIES})
-
-    # Configure libcurl and its dependencies OpenSSL & zlib
-    find_package(CURL REQUIRED)
-    if (NOT MSVC)
-        # Required by libcurl
-        find_package(ZLIB REQUIRED)
-    endif()
-    target_include_directories(PrusaSlicer PRIVATE ${CURL_INCLUDE_DIRS})
-    target_link_libraries(PrusaSlicer ${CURL_LIBRARIES} ${ZLIB_LIBRARIES})
-    if (SLIC3R_STATIC)
-        if (NOT APPLE)
-            # libcurl is always linked dynamically to the system libcurl on OSX.
-            # On other systems, libcurl is linked statically if SLIC3R_STATIC is set.
-            target_compile_definitions(PrusaSlicer PRIVATE CURL_STATICLIB)
-        endif()
-        if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-            # As of now, our build system produces a statically linked libcurl,
-            # which links the OpenSSL library dynamically.
-            find_package(OpenSSL REQUIRED)
-            message("OpenSSL include dir: ${OPENSSL_INCLUDE_DIR}")
-            message("OpenSSL libraries: ${OPENSSL_LIBRARIES}")
-            target_include_directories(PrusaSlicer PRIVATE ${OPENSSL_INCLUDE_DIR})
-            target_link_libraries(PrusaSlicer ${OPENSSL_LIBRARIES})
-        endif()
-    endif()
-
+#    target_link_libraries(PrusaSlicer ws2_32 uxtheme setupapi libslic3r_gui ${wxWidgets_LIBRARIES})
+target_link_libraries(PrusaSlicer libslic3r_gui)
     if (MSVC)
         # Generate debug symbols even in release mode.
         target_link_options(PrusaSlicer PUBLIC "$<$<CONFIG:RELEASE>:/DEBUG>")
-        target_link_libraries(PrusaSlicer user32.lib Setupapi.lib OpenGL32.Lib GlU32.Lib)
+        target_link_libraries(PrusaSlicer user32.lib Setupapi.lib)
     elseif (MINGW)
-        target_link_libraries(PrusaSlicer -lopengl32)
+        target_link_libraries(PrusaSlicer ws2_32 uxtheme setupapi)
     elseif (APPLE)
         target_link_libraries(PrusaSlicer "-framework OpenGL")
     else ()
-        target_link_libraries(PrusaSlicer -ldl -lGL -lGLU)
+        target_link_libraries(PrusaSlicer -ldl)
     endif ()
 endif ()
 
 # On Windows, a shim application is required to produce a console / non console version of the Slic3r application.
 # Also the shim may load the Mesa software OpenGL renderer if the default renderer does not support OpenGL 2.0 and higher.
-if (MSVC)
+if (WIN32)
+    if (MINGW)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -municode")
+    endif()
+
     add_executable(PrusaSlicer_app_gui WIN32 PrusaSlicer_app_msvc.cpp ${CMAKE_CURRENT_BINARY_DIR}/PrusaSlicer.rc)
     # Generate debug symbols even in release mode.
-    target_link_options(PrusaSlicer_app_gui PUBLIC "$<$<CONFIG:RELEASE>:/DEBUG>")
+    if(MSVC)
+        target_link_options(PrusaSlicer_app_gui PUBLIC "$<$<CONFIG:RELEASE>:/DEBUG>")
+    endif()
     target_compile_definitions(PrusaSlicer_app_gui PRIVATE -DSLIC3R_WRAPPER_NOCONSOLE)
     add_dependencies(PrusaSlicer_app_gui PrusaSlicer)
     set_target_properties(PrusaSlicer_app_gui PROPERTIES OUTPUT_NAME "prusa-slicer")
+    target_link_libraries(PrusaSlicer_app_gui PRIVATE boost_headeronly)
 
     add_executable(PrusaSlicer_app_console PrusaSlicer_app_msvc.cpp ${CMAKE_CURRENT_BINARY_DIR}/PrusaSlicer.rc)
     # Generate debug symbols even in release mode.
+    if (MSVC)
     target_link_options(PrusaSlicer_app_console PUBLIC "$<$<CONFIG:RELEASE>:/DEBUG>")
+    endif ()
     target_compile_definitions(PrusaSlicer_app_console PRIVATE -DSLIC3R_WRAPPER_CONSOLE)
     add_dependencies(PrusaSlicer_app_console PrusaSlicer)
     set_target_properties(PrusaSlicer_app_console PROPERTIES OUTPUT_NAME "prusa-slicer-console")
+    target_link_libraries(PrusaSlicer_app_console PRIVATE boost_headeronly)
 endif ()
 
 # Link the resources dir to where Slic3r GUI expects it
-if (MSVC)
+if (WIN32)
     if (CMAKE_CONFIGURATION_TYPES)
         foreach (CONF ${CMAKE_CONFIGURATION_TYPES})
             file(TO_NATIVE_PATH "${CMAKE_CURRENT_BINARY_DIR}/${CONF}" WIN_CONF_OUTPUT_DIR)
@@ -175,16 +193,21 @@ if (MSVC)
             VERBATIM
         )
     endif ()
+    
+    # This has to be a separate target due to the windows command line lenght limits
+    add_custom_target(PrusaSlicerDllsCopy ALL DEPENDS PrusaSlicer)
+    prusaslicer_copy_dlls(PrusaSlicerDllsCopy)
+    
 elseif (XCODE)
     # Because of Debug/Release/etc. configurations (similar to MSVC) the slic3r binary is located in an extra level
     add_custom_command(TARGET PrusaSlicer POST_BUILD
-        COMMAND ln -sf "${SLIC3R_RESOURCES_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/resources"
+        COMMAND ln -sfn "${SLIC3R_RESOURCES_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/resources"
         COMMENT "Symlinking the resources directory into the build tree"
         VERBATIM
     )
 else ()
     add_custom_command(TARGET PrusaSlicer POST_BUILD
-        COMMAND ln -sf "${SLIC3R_RESOURCES_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/../resources"
+        COMMAND ln -sfn "${SLIC3R_RESOURCES_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/../resources"
         COMMENT "Symlinking the resources directory into the build tree"
         VERBATIM
     )

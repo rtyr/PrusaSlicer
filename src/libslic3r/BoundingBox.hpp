@@ -15,22 +15,24 @@ public:
     PointClass max;
     bool defined;
     
-    BoundingBoxBase() : defined(false), min(PointClass::Zero()), max(PointClass::Zero()) {}
+    BoundingBoxBase() : min(PointClass::Zero()), max(PointClass::Zero()), defined(false) {}
     BoundingBoxBase(const PointClass &pmin, const PointClass &pmax) : 
         min(pmin), max(pmax), defined(pmin(0) < pmax(0) && pmin(1) < pmax(1)) {}
     BoundingBoxBase(const std::vector<PointClass>& points) : min(PointClass::Zero()), max(PointClass::Zero())
     {
-        if (points.empty())
-            throw std::invalid_argument("Empty point set supplied to BoundingBoxBase constructor");
-
-        typename std::vector<PointClass>::const_iterator it = points.begin();
-        this->min = *it;
-        this->max = *it;
-        for (++ it; it != points.end(); ++ it) {
-            this->min = this->min.cwiseMin(*it);
-            this->max = this->max.cwiseMax(*it);
+        if (points.empty()) {
+            this->defined = false;
+            // throw std::invalid_argument("Empty point set supplied to BoundingBoxBase constructor");
+        } else {
+            typename std::vector<PointClass>::const_iterator it = points.begin();
+            this->min = *it;
+            this->max = *it;
+            for (++ it; it != points.end(); ++ it) {
+                this->min = this->min.cwiseMin(*it);
+                this->max = this->max.cwiseMax(*it);
+            }
+            this->defined = (this->min(0) < this->max(0)) && (this->min(1) < this->max(1));
         }
-        this->defined = (this->min(0) < this->max(0)) && (this->min(1) < this->max(1));
     }
     void reset() { this->defined = false; this->min = PointClass::Zero(); this->max = PointClass::Zero(); }
     void merge(const PointClass &point);
@@ -59,7 +61,7 @@ template <class PointClass>
 class BoundingBox3Base : public BoundingBoxBase<PointClass>
 {
 public:
-    BoundingBox3Base() : BoundingBoxBase<PointClass>() {};
+    BoundingBox3Base() : BoundingBoxBase<PointClass>() {}
     BoundingBox3Base(const PointClass &pmin, const PointClass &pmax) : 
         BoundingBoxBase<PointClass>(pmin, pmax) 
         { if (pmin(2) >= pmax(2)) BoundingBoxBase<PointClass>::defined = false; }
@@ -100,6 +102,33 @@ public:
     }
 };
 
+// Will prevent warnings caused by non existing definition of template in hpp
+extern template void     BoundingBoxBase<Point>::scale(double factor);
+extern template void     BoundingBoxBase<Vec2d>::scale(double factor);
+extern template void     BoundingBoxBase<Vec3d>::scale(double factor);
+extern template void     BoundingBoxBase<Point>::offset(coordf_t delta);
+extern template void     BoundingBoxBase<Vec2d>::offset(coordf_t delta);
+extern template void     BoundingBoxBase<Point>::merge(const Point &point);
+extern template void     BoundingBoxBase<Vec2d>::merge(const Vec2d &point);
+extern template void     BoundingBoxBase<Point>::merge(const Points &points);
+extern template void     BoundingBoxBase<Vec2d>::merge(const Pointfs &points);
+extern template void     BoundingBoxBase<Point>::merge(const BoundingBoxBase<Point> &bb);
+extern template void     BoundingBoxBase<Vec2d>::merge(const BoundingBoxBase<Vec2d> &bb);
+extern template Point    BoundingBoxBase<Point>::size() const;
+extern template Vec2d    BoundingBoxBase<Vec2d>::size() const;
+extern template double   BoundingBoxBase<Point>::radius() const;
+extern template double   BoundingBoxBase<Vec2d>::radius() const;
+extern template Point    BoundingBoxBase<Point>::center() const;
+extern template Vec2d    BoundingBoxBase<Vec2d>::center() const;
+extern template void     BoundingBox3Base<Vec3d>::merge(const Vec3d &point);
+extern template void     BoundingBox3Base<Vec3d>::merge(const Pointf3s &points);
+extern template void     BoundingBox3Base<Vec3d>::merge(const BoundingBox3Base<Vec3d> &bb);
+extern template Vec3d    BoundingBox3Base<Vec3d>::size() const;
+extern template double   BoundingBox3Base<Vec3d>::radius() const;
+extern template void     BoundingBox3Base<Vec3d>::offset(coordf_t delta);
+extern template Vec3d    BoundingBox3Base<Vec3d>::center() const;
+extern template coordf_t BoundingBox3Base<Vec3d>::max_size() const;
+
 class BoundingBox : public BoundingBoxBase<Point>
 {
 public:
@@ -113,10 +142,9 @@ public:
     // to encompass the original bounding box.
     void align_to_grid(const coord_t cell_size);
     
-    BoundingBox() : BoundingBoxBase<Point>() {};
-    BoundingBox(const Point &pmin, const Point &pmax) : BoundingBoxBase<Point>(pmin, pmax) {};
-    BoundingBox(const Points &points) : BoundingBoxBase<Point>(points) {};
-    BoundingBox(const Lines &lines);
+    BoundingBox() : BoundingBoxBase<Point>() {}
+    BoundingBox(const Point &pmin, const Point &pmax) : BoundingBoxBase<Point>(pmin, pmax) {}
+    BoundingBox(const Points &points) : BoundingBoxBase<Point>(points) {}
 
     friend BoundingBox get_extents_rotated(const Points &points, double angle);
 };
@@ -124,25 +152,25 @@ public:
 class BoundingBox3  : public BoundingBox3Base<Vec3crd> 
 {
 public:
-    BoundingBox3() : BoundingBox3Base<Vec3crd>() {};
-    BoundingBox3(const Vec3crd &pmin, const Vec3crd &pmax) : BoundingBox3Base<Vec3crd>(pmin, pmax) {};
-    BoundingBox3(const Points3& points) : BoundingBox3Base<Vec3crd>(points) {};
+    BoundingBox3() : BoundingBox3Base<Vec3crd>() {}
+    BoundingBox3(const Vec3crd &pmin, const Vec3crd &pmax) : BoundingBox3Base<Vec3crd>(pmin, pmax) {}
+    BoundingBox3(const Points3& points) : BoundingBox3Base<Vec3crd>(points) {}
 };
 
 class BoundingBoxf : public BoundingBoxBase<Vec2d> 
 {
 public:
-    BoundingBoxf() : BoundingBoxBase<Vec2d>() {};
-    BoundingBoxf(const Vec2d &pmin, const Vec2d &pmax) : BoundingBoxBase<Vec2d>(pmin, pmax) {};
-    BoundingBoxf(const std::vector<Vec2d> &points) : BoundingBoxBase<Vec2d>(points) {};
+    BoundingBoxf() : BoundingBoxBase<Vec2d>() {}
+    BoundingBoxf(const Vec2d &pmin, const Vec2d &pmax) : BoundingBoxBase<Vec2d>(pmin, pmax) {}
+    BoundingBoxf(const std::vector<Vec2d> &points) : BoundingBoxBase<Vec2d>(points) {}
 };
 
 class BoundingBoxf3 : public BoundingBox3Base<Vec3d> 
 {
 public:
-    BoundingBoxf3() : BoundingBox3Base<Vec3d>() {};
-    BoundingBoxf3(const Vec3d &pmin, const Vec3d &pmax) : BoundingBox3Base<Vec3d>(pmin, pmax) {};
-    BoundingBoxf3(const std::vector<Vec3d> &points) : BoundingBox3Base<Vec3d>(points) {};
+    BoundingBoxf3() : BoundingBox3Base<Vec3d>() {}
+    BoundingBoxf3(const Vec3d &pmin, const Vec3d &pmax) : BoundingBox3Base<Vec3d>(pmin, pmax) {}
+    BoundingBoxf3(const std::vector<Vec3d> &points) : BoundingBox3Base<Vec3d>(points) {}
 
     BoundingBoxf3 transformed(const Transform3d& matrix) const;
 };
@@ -159,6 +187,19 @@ inline bool empty(const BoundingBox3Base<VT> &bb)
     return ! bb.defined || bb.min(0) >= bb.max(0) || bb.min(1) >= bb.max(1) || bb.min(2) >= bb.max(2);
 }
 
+inline BoundingBox scaled(const BoundingBoxf &bb) { return {scaled(bb.min), scaled(bb.max)}; }
+inline BoundingBox3 scaled(const BoundingBoxf3 &bb) { return {scaled(bb.min), scaled(bb.max)}; }
+inline BoundingBoxf unscaled(const BoundingBox &bb) { return {unscaled(bb.min), unscaled(bb.max)}; }
+inline BoundingBoxf3 unscaled(const BoundingBox3 &bb) { return {unscaled(bb.min), unscaled(bb.max)}; }
+
 } // namespace Slic3r
+
+// Serialization through the Cereal library
+namespace cereal {
+	template<class Archive> void serialize(Archive& archive, Slic3r::BoundingBox   &bb) { archive(bb.min, bb.max, bb.defined); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::BoundingBox3  &bb) { archive(bb.min, bb.max, bb.defined); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::BoundingBoxf  &bb) { archive(bb.min, bb.max, bb.defined); }
+	template<class Archive> void serialize(Archive& archive, Slic3r::BoundingBoxf3 &bb) { archive(bb.min, bb.max, bb.defined); }
+}
 
 #endif

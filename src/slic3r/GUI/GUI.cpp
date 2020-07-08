@@ -1,13 +1,11 @@
 #include "GUI.hpp"
 #include "GUI_App.hpp"
 #include "I18N.hpp"
-#include "WipeTowerDialog.hpp"
 
-#include <assert.h>
 #include <string>
 
-#include <boost/lexical_cast.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/any.hpp>
 
 #if __APPLE__
 #import <IOKit/pwr_mgt/IOPMLib.h>
@@ -18,22 +16,16 @@
 #include "boost/nowide/convert.hpp"
 #endif
 
-#include <wx/display.h>
-
-#include "wxExtensions.hpp"
-#include "GUI_Preview.hpp"
 #include "AboutDialog.hpp"
-#include "AppConfig.hpp"
-#include "ConfigWizard.hpp"
-#include "PresetBundle.hpp"
-#include "UpdateDialogs.hpp"
+#include "MsgDialog.hpp"
 
-#include "libslic3r/Utils.hpp"
 #include "libslic3r/Print.hpp"
-#include "Tab.hpp"
-#include "GUI_ObjectList.hpp"
 
-namespace Slic3r { namespace GUI {
+namespace Slic3r {
+
+class AppConfig;
+
+namespace GUI {
 
 #if __APPLE__
 IOPMAssertionID assertionID;
@@ -101,54 +93,17 @@ const std::string& shortkey_alt_prefix()
 	return str;
 }
 
-bool config_wizard_startup(bool app_config_exists)
-{
-    if (!app_config_exists || wxGetApp().preset_bundle->printers.size() <= 1) {
-		config_wizard(ConfigWizard::RR_DATA_EMPTY);
-		return true;
-	} else if (get_app_config()->legacy_datadir()) {
-		// Looks like user has legacy pre-vendorbundle data directory,
-		// explain what this is and run the wizard
-
-		MsgDataLegacy dlg;
-		dlg.ShowModal();
-
-		config_wizard(ConfigWizard::RR_DATA_LEGACY);
-		return true;
-	}
-	return false;
-}
-
-void config_wizard(int reason)
-{
-    // Exit wizard if there are unsaved changes and the user cancels the action.
-    if (! wxGetApp().check_unsaved_changes())
-    	return;
-
-	try {
-		ConfigWizard wizard(nullptr, static_cast<ConfigWizard::RunReason>(reason));
-        wizard.run(wxGetApp().preset_bundle, wxGetApp().preset_updater);
-	}
-	catch (const std::exception &e) {
-		show_error(nullptr, e.what());
-	}
-
-	wxGetApp().load_current_presets();
-
-    if (wxGetApp().preset_bundle->printers.get_edited_preset().printer_technology() == ptSLA &&
-        wxGetApp().obj_list()->has_multi_part_objects())
-    {
-        show_info(nullptr,
-            _(L("It's impossible to print multi-part object(s) with SLA technology.")) + "\n\n" +
-            _(L("Please check and fix your object list.")),
-            _(L("Attention!")));
-    }
-}
-
 // opt_index = 0, by the reason of zero-index in ConfigOptionVector by default (in case only one element)
 void change_opt_value(DynamicPrintConfig& config, const t_config_option_key& opt_key, const boost::any& value, int opt_index /*= 0*/)
 {
 	try{
+
+        if (config.def()->get(opt_key)->type == coBools && config.def()->get(opt_key)->nullable) {
+            ConfigOptionBoolsNullable* vec_new = new ConfigOptionBoolsNullable{ boost::any_cast<unsigned char>(value) };
+            config.option<ConfigOptionBoolsNullable>(opt_key)->set_at(vec_new, opt_index, 0);
+            return;
+        }
+
 		switch (config.def()->get(opt_key)->type) {
 		case coFloatOrPercent:{
 			std::string str = boost::any_cast<std::string>(value);
@@ -225,6 +180,8 @@ void change_opt_value(DynamicPrintConfig& config, const t_config_option_key& opt
 				opt_key == "bottom_fill_pattern" ||
 				opt_key == "fill_pattern")
 				config.set_key_value(opt_key, new ConfigOptionEnum<InfillPattern>(boost::any_cast<InfillPattern>(value))); 
+			else if (opt_key.compare("ironing_type") == 0)
+				config.set_key_value(opt_key, new ConfigOptionEnum<IroningType>(boost::any_cast<IroningType>(value))); 
 			else if (opt_key.compare("gcode_flavor") == 0)
 				config.set_key_value(opt_key, new ConfigOptionEnum<GCodeFlavor>(boost::any_cast<GCodeFlavor>(value))); 
 			else if (opt_key.compare("support_material_pattern") == 0)
@@ -256,7 +213,7 @@ void change_opt_value(DynamicPrintConfig& config, const t_config_option_key& opt
 	}
 	catch (const std::exception & /* e */)
 	{
-		int i = 0;//no reason, just experiment
+		// int i = 0;//no reason, just experiment
 	}
 }
 
@@ -266,21 +223,33 @@ void show_error(wxWindow* parent, const wxString& message)
 	msg.ShowModal();
 }
 
+void show_error(wxWindow* parent, const char* message)
+{
+	assert(message);
+	show_error(parent, wxString::FromUTF8(message));
+}
+
 void show_error_id(int id, const std::string& message)
 {
 	auto *parent = id != 0 ? wxWindow::FindWindowById(id) : nullptr;
-	show_error(parent, from_u8(message));
+	show_error(parent, message);
 }
 
 void show_info(wxWindow* parent, const wxString& message, const wxString& title)
 {
-	wxMessageDialog msg_wingow(parent, message, title.empty() ? _(L("Notice")) : title, wxOK | wxICON_INFORMATION);
+	wxMessageDialog msg_wingow(parent, message, wxString(SLIC3R_APP_NAME " - ") + (title.empty() ? _L("Notice") : title), wxOK | wxICON_INFORMATION);
 	msg_wingow.ShowModal();
+}
+
+void show_info(wxWindow* parent, const char* message, const char* title)
+{
+	assert(message);
+	show_info(parent, wxString::FromUTF8(message), title ? wxString::FromUTF8(title) : wxString());
 }
 
 void warning_catcher(wxWindow* parent, const wxString& message)
 {
-	wxMessageDialog msg(parent, message, _(L("Warning")), wxOK | wxICON_WARNING);
+	wxMessageDialog msg(parent, message, _L("Warning"), wxOK | wxICON_WARNING);
 	msg.ShowModal();
 }
 
@@ -290,14 +259,14 @@ void create_combochecklist(wxComboCtrl* comboCtrl, std::string text, std::string
         return;
 
     wxCheckListBoxComboPopup* popup = new wxCheckListBoxComboPopup;
-    if (popup != nullptr)
-    {
-        // FIXME If the following line is removed, the combo box popup list will not react to mouse clicks.
+    if (popup != nullptr) {
+		// FIXME If the following line is removed, the combo box popup list will not react to mouse clicks.
         //  On the other side, with this line the combo box popup cannot be closed by clicking on the combo button on Windows 10.
         comboCtrl->UseAltPopupWindow();
 
-        comboCtrl->EnablePopupAnimation(false);
-        comboCtrl->SetPopupControl(popup);
+		// the following line messes up the popup size the first time it is shown on wxWidgets 3.1.3
+//		comboCtrl->EnablePopupAnimation(false);
+		comboCtrl->SetPopupControl(popup);
         popup->SetStringValue(from_u8(text));
         popup->Bind(wxEVT_CHECKLISTBOX, [popup](wxCommandEvent& evt) { popup->OnCheckListBox(evt); });
         popup->Bind(wxEVT_LISTBOX, [popup](wxCommandEvent& evt) { popup->OnListBoxSelection(evt); });
@@ -307,13 +276,11 @@ void create_combochecklist(wxComboCtrl* comboCtrl, std::string text, std::string
         std::vector<std::string> items_str;
         boost::split(items_str, items, boost::is_any_of("|"), boost::token_compress_off);
 
-        for (const std::string& item : items_str)
-        {
+        for (const std::string& item : items_str) {
             popup->Append(from_u8(item));
         }
 
-        for (unsigned int i = 0; i < popup->GetCount(); ++i)
-        {
+        for (unsigned int i = 0; i < popup->GetCount(); ++i) {
             popup->Check(i, initial_value);
         }
     }
@@ -324,10 +291,8 @@ int combochecklist_get_flags(wxComboCtrl* comboCtrl)
     int flags = 0;
 
     wxCheckListBoxComboPopup* popup = wxDynamicCast(comboCtrl->GetPopupControl(), wxCheckListBoxComboPopup);
-    if (popup != nullptr)
-    {
-        for (unsigned int i = 0; i < popup->GetCount(); ++i)
-        {
+    if (popup != nullptr) {
+        for (unsigned int i = 0; i < popup->GetCount(); ++i) {
             if (popup->IsChecked(i))
                 flags |= 1 << i;
         }

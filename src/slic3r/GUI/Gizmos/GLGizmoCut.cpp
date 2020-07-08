@@ -9,65 +9,21 @@
 #include <wx/stattext.h>
 #include <wx/sizer.h>
 
+#include <algorithm>
+
 #include "slic3r/GUI/GUI_App.hpp"
+#include "slic3r/GUI/Plater.hpp"
 
 
 namespace Slic3r {
 namespace GUI {
 
-
-class GLGizmoCutPanel : public wxPanel
-{
-public:
-    GLGizmoCutPanel(wxWindow *parent);
-
-    void display(bool display);
-private:
-    bool m_active;
-    wxCheckBox *m_cb_rotate;
-    wxButton *m_btn_cut;
-    wxButton *m_btn_cancel;
-};
-
-GLGizmoCutPanel::GLGizmoCutPanel(wxWindow *parent)
-    : wxPanel(parent)
-    , m_active(false)
-    , m_cb_rotate(new wxCheckBox(this, wxID_ANY, _(L("Rotate lower part upwards"))))
-    , m_btn_cut(new wxButton(this, wxID_OK, _(L("Perform cut"))))
-    , m_btn_cancel(new wxButton(this, wxID_CANCEL, _(L("Cancel"))))
-{
-    enum { MARGIN = 5 };
-
-    auto *sizer = new wxBoxSizer(wxHORIZONTAL);
-
-    auto *label = new wxStaticText(this, wxID_ANY, _(L("Cut object:")));
-    sizer->Add(label, 0, wxALL | wxALIGN_CENTER, MARGIN);
-    sizer->Add(m_cb_rotate, 0, wxALL | wxALIGN_CENTER, MARGIN);
-    sizer->AddStretchSpacer();
-    sizer->Add(m_btn_cut, 0, wxALL | wxALIGN_CENTER, MARGIN);
-    sizer->Add(m_btn_cancel, 0, wxALL | wxALIGN_CENTER, MARGIN);
-
-    SetSizer(sizer);
-}
-
-void GLGizmoCutPanel::display(bool display)
-{
-    Show(display);
-    GetParent()->Layout();
-}
-
-
 const double GLGizmoCut::Offset = 10.0;
 const double GLGizmoCut::Margin = 20.0;
-const std::array<float, 3> GLGizmoCut::GrabberColor = { 1.0, 0.5, 0.0 };
+const std::array<float, 4> GLGizmoCut::GrabberColor = { 1.0, 0.5, 0.0, 1.0 };
 
-#if ENABLE_SVG_ICONS
 GLGizmoCut::GLGizmoCut(GLCanvas3D& parent, const std::string& icon_filename, unsigned int sprite_id)
     : GLGizmoBase(parent, icon_filename, sprite_id)
-#else
-GLGizmoCut::GLGizmoCut(GLCanvas3D& parent, unsigned int sprite_id)
-    : GLGizmoBase(parent, sprite_id)
-#endif // ENABLE_SVG_ICONS
     , m_cut_z(0.0)
     , m_max_z(0.0)
     , m_keep_upper(true)
@@ -75,6 +31,10 @@ GLGizmoCut::GLGizmoCut(GLCanvas3D& parent, unsigned int sprite_id)
     , m_rotate_lower(false)
 {}
 
+std::string GLGizmoCut::get_tooltip() const
+{
+    return (m_hover_id == 0 || m_grabbers[0].dragging) ? "Z: " + format(m_cut_z, 2) : "";
+}
 
 bool GLGizmoCut::on_init()
 {
@@ -96,15 +56,18 @@ void GLGizmoCut::on_set_state()
     }
 }
 
-bool GLGizmoCut::on_is_activable(const Selection& selection) const
+bool GLGizmoCut::on_is_activable() const
 {
+    const Selection& selection = m_parent.get_selection();
     return selection.is_single_full_instance() && !selection.is_wipe_tower();
 }
 
-void GLGizmoCut::on_start_dragging(const Selection& selection)
+void GLGizmoCut::on_start_dragging()
 {
-    if (m_hover_id == -1) { return; }
+    if (m_hover_id == -1)
+        return;
 
+    const Selection& selection = m_parent.get_selection();
     const BoundingBoxf3& box = selection.get_bounding_box();
     m_start_z = m_cut_z;
     update_max_z(selection);
@@ -113,18 +76,16 @@ void GLGizmoCut::on_start_dragging(const Selection& selection)
     m_drag_center(2) = m_cut_z;
 }
 
-void GLGizmoCut::on_update(const UpdateData& data, const Selection& selection)
+void GLGizmoCut::on_update(const UpdateData& data)
 {
     if (m_hover_id != -1) {
         set_cut_z(m_start_z + calc_projection(data.mouse_ray));
     }
 }
 
-void GLGizmoCut::on_render(const Selection& selection) const
+void GLGizmoCut::on_render() const
 {
-    if (m_grabbers[0].dragging) {
-        set_tooltip("Z: " + format(m_cut_z, 2));
-    }
+    const Selection& selection = m_parent.get_selection();
 
     update_max_z(selection);
 
@@ -171,28 +132,46 @@ void GLGizmoCut::on_render(const Selection& selection) const
     m_grabbers[0].render(m_hover_id == 0, (float)((box.size()(0) + box.size()(1) + box.size()(2)) / 3.0));
 }
 
-void GLGizmoCut::on_render_for_picking(const Selection& selection) const
+void GLGizmoCut::on_render_for_picking() const
 {
     glsafe(::glDisable(GL_DEPTH_TEST));
-
-    render_grabbers_for_picking(selection.get_bounding_box());
+    render_grabbers_for_picking(m_parent.get_selection().get_bounding_box());
 }
 
-void GLGizmoCut::on_render_input_window(float x, float y, float bottom_limit, const Selection& selection)
+void GLGizmoCut::on_render_input_window(float x, float y, float bottom_limit)
 {
-    const float approx_height = m_imgui->scaled(11.0f);
-    y = std::min(y, bottom_limit - approx_height);
-    m_imgui->set_next_window_pos(x, y, ImGuiCond_Always);
+    static float last_y = 0.0f;
+    static float last_h = 0.0f;
 
-    m_imgui->set_next_window_bg_alpha(0.5f);
-    m_imgui->begin(_(L("Cut")), ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
+    m_imgui->begin(_(L("Cut")), ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse);
 
-    ImGui::PushItemWidth(m_imgui->scaled(5.0f));
-    bool _value_changed = ImGui::InputDouble("Z", &m_cut_z, 0.0f, 0.0f, "%.2f");
+    // adjust window position to avoid overlap the view toolbar
+    float win_h = ImGui::GetWindowHeight();
+    y = std::min(y, bottom_limit - win_h);
+    ImGui::SetWindowPos(ImVec2(x, y), ImGuiCond_Always);
+    if ((last_h != win_h) || (last_y != y))
+    {
+        // ask canvas for another frame to render the window in the correct position
+        m_parent.request_extra_frame();
+        if (last_h != win_h)
+            last_h = win_h;
+        if (last_y != y)
+            last_y = y;
+    }
+
+    ImGui::AlignTextToFramePadding();
+    m_imgui->text("Z");
+    ImGui::SameLine();
+    ImGui::PushItemWidth(m_imgui->get_style_scaling() * 150.0f);
+    ImGui::InputDouble("", &m_cut_z, 0.0f, 0.0f, "%.2f");
+
+    ImGui::Separator();
 
     m_imgui->checkbox(_(L("Keep upper part")), m_keep_upper);
     m_imgui->checkbox(_(L("Keep lower part")), m_keep_lower);
     m_imgui->checkbox(_(L("Rotate lower part upwards")), m_rotate_lower);
+
+    ImGui::Separator();
 
     m_imgui->disabled_begin(!m_keep_upper && !m_keep_lower);
     const bool cut_clicked = m_imgui->button(_(L("Perform cut")));
@@ -201,7 +180,7 @@ void GLGizmoCut::on_render_input_window(float x, float y, float bottom_limit, co
     m_imgui->end();
 
     if (cut_clicked && (m_keep_upper || m_keep_lower)) {
-        perform_cut(selection);
+        perform_cut(m_parent.get_selection());
     }
 }
 
@@ -214,17 +193,25 @@ void GLGizmoCut::update_max_z(const Selection& selection) const
 void GLGizmoCut::set_cut_z(double cut_z) const
 {
     // Clamp the plane to the object's bounding box
-    m_cut_z = std::max(0.0, std::min(m_max_z, cut_z));
+    m_cut_z = std::clamp(cut_z, 0.0, m_max_z);
 }
 
 void GLGizmoCut::perform_cut(const Selection& selection)
 {
-    const auto instance_idx = selection.get_instance_idx();
-    const auto object_idx = selection.get_object_idx();
+    const int instance_idx = selection.get_instance_idx();
+    const int object_idx = selection.get_object_idx();
 
     wxCHECK_RET(instance_idx >= 0 && object_idx >= 0, "GLGizmoCut: Invalid object selection");
 
-    wxGetApp().plater()->cut(object_idx, instance_idx, m_cut_z, m_keep_upper, m_keep_lower, m_rotate_lower);
+    // m_cut_z is the distance from the bed. Subtract possible SLA elevation.
+    const GLVolume* first_glvolume = selection.get_volume(*selection.get_volume_idxs().begin());
+    coordf_t object_cut_z = m_cut_z - first_glvolume->get_sla_shift_z();
+
+    if (object_cut_z > 0.)
+        wxGetApp().plater()->cut(object_idx, instance_idx, object_cut_z, m_keep_upper, m_keep_lower, m_rotate_lower);
+    else {
+        // the object is SLA-elevated and the plane is under it.
+    }
 }
 
 double GLGizmoCut::calc_projection(const Linef3& mouse_ray) const

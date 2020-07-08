@@ -1,5 +1,5 @@
-#ifndef _technologies_h_
-#define _technologies_h_
+#ifndef _prusaslicer_technologies_h_
+#define _prusaslicer_technologies_h_
 
 //============
 // debug techs
@@ -13,37 +13,49 @@
 #define ENABLE_RENDER_SELECTION_CENTER 0
 // Shows an imgui dialog with render related data
 #define ENABLE_RENDER_STATISTICS 0
-
-
-//====================
-// 1.42.0.alpha1 techs
-//====================
-#define ENABLE_1_42_0_ALPHA1 1
-
+// Shows an imgui dialog with camera related data
+#define ENABLE_CAMERA_STATISTICS 0
+//  Render the picking pass instead of the main scene (use [T] key to toggle between regular rendering and picking pass only rendering)
+#define ENABLE_RENDER_PICKING_PASS 0
+// Enable extracting thumbnails from selected gcode and save them as png files
+#define ENABLE_THUMBNAIL_GENERATOR_DEBUG 0
 // Disable synchronization of unselected instances
-#define DISABLE_INSTANCES_SYNCH (0 && ENABLE_1_42_0_ALPHA1)
-// Disable imgui dialog for move, rotate and scale gizmos
-#define DISABLE_MOVE_ROTATE_SCALE_GIZMOS_IMGUI (1 && ENABLE_1_42_0_ALPHA1)
+#define DISABLE_INSTANCES_SYNCH 0
 // Use wxDataViewRender instead of wxDataViewCustomRenderer
-#define ENABLE_NONCUSTOM_DATA_VIEW_RENDERING (0 && ENABLE_1_42_0_ALPHA1)
+#define ENABLE_NONCUSTOM_DATA_VIEW_RENDERING 0
 
 
-//====================
-// 1.42.0.alpha7 techs
-//====================
-#define ENABLE_1_42_0_ALPHA7 1
+//================
+// 2.2.0.rc1 techs
+//================
+#define ENABLE_2_2_0_RC1 1
 
-// Printbed textures generated from svg files
-#define ENABLE_TEXTURES_FROM_SVG (1 && ENABLE_1_42_0_ALPHA7)
-
-
-//====================
-// 1.42.0.alpha8 techs
-//====================
-#define ENABLE_1_42_0_ALPHA8 1
-
-// Toolbars and Gizmos use icons imported from svg files
-#define ENABLE_SVG_ICONS (1 && ENABLE_1_42_0_ALPHA8 && ENABLE_TEXTURES_FROM_SVG)
+// Enable hack to remove crash when closing on OSX 10.9.5
+#define ENABLE_HACK_CLOSING_ON_OSX_10_9_5 (1 && ENABLE_2_2_0_RC1)
 
 
-#endif // _technologies_h_
+//===================
+// 2.3.0.alpha1 techs
+//===================
+#define ENABLE_2_3_0_ALPHA1 1
+
+// Enable rendering of objects colored by facets' slope
+#define ENABLE_SLOPE_RENDERING (1 && ENABLE_2_3_0_ALPHA1)
+
+// Enable rendering of objects using environment map
+#define ENABLE_ENVIRONMENT_MAP (1 && ENABLE_2_3_0_ALPHA1)
+
+// Enable smoothing of objects normals
+#define ENABLE_SMOOTH_NORMALS (0 && ENABLE_2_3_0_ALPHA1)
+
+// Enable error logging for OpenGL calls when SLIC3R_LOGLEVEL >= 5
+#define ENABLE_OPENGL_ERROR_LOGGING (1 && ENABLE_2_3_0_ALPHA1)
+
+// Enable built-in DPI changed event handler of wxWidgets 3.1.3
+#define ENABLE_WX_3_1_3_DPI_CHANGED_EVENT (1 && ENABLE_2_3_0_ALPHA1)
+
+// Enable changing application layout without the need to restart
+#define ENABLE_LAYOUT_NO_RESTART (1 && ENABLE_2_3_0_ALPHA1)
+
+
+#endif // _prusaslicer_technologies_h_

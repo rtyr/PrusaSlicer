@@ -6,10 +6,10 @@
 #include <string>
 #include <vector>
 
-#include <boost/filesystem.hpp>
+#include <boost/filesystem/path.hpp>
 
+#include "libslic3r/Semver.hpp"
 #include "Version.hpp"
-#include "../Utils/Semver.hpp"
 
 namespace Slic3r { 
 
@@ -18,7 +18,6 @@ class AppConfig;
 namespace GUI {
 namespace Config {
 
-class Index;
 
 // A snapshot contains:
 // 		Slic3r.ini

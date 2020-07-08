@@ -12,13 +12,14 @@ namespace Slic3r {
 class PlaceholderParser
 {
 public:    
-    PlaceholderParser();
+    PlaceholderParser(const DynamicConfig *external_config = nullptr);
     
     // Return a list of keys, which should be changed in m_config from rhs.
     // This contains keys, which are found in rhs, but not in m_config.
     std::vector<std::string> config_diff(const DynamicPrintConfig &rhs);
     // Return true if modified.
     bool apply_config(const DynamicPrintConfig &config);
+    void apply_config(DynamicPrintConfig &&config);
     // To be called on the values returned by PlaceholderParser::config_diff().
     // The keys should already be valid.
     void apply_only(const DynamicPrintConfig &config, const std::vector<std::string> &keys);
@@ -35,10 +36,12 @@ public:
 	DynamicConfig&			config_writable()					{ return m_config; }
 	const DynamicConfig&    config() const                      { return m_config; }
     const ConfigOption*     option(const std::string &key) const { return m_config.option(key); }
+    // External config is not owned by PlaceholderParser. It has a lowest priority when looking up an option.
+	const DynamicConfig*	external_config() const  			{ return m_external_config; }
 
     // Fill in the template using a macro processing language.
     // Throws std::runtime_error on syntax or runtime error.
-    std::string process(const std::string &templ, unsigned int current_extruder_id, const DynamicConfig *config_override = nullptr) const;
+    std::string process(const std::string &templ, unsigned int current_extruder_id = 0, const DynamicConfig *config_override = nullptr) const;
     
     // Evaluate a boolean expression using the full expressive power of the PlaceholderParser boolean expression syntax.
     // Throws std::runtime_error on syntax or runtime error.
@@ -50,7 +53,9 @@ public:
     void update_timestamp() { update_timestamp(m_config); }
 
 private:
-    DynamicConfig m_config;
+	// config has a higher priority than external_config when looking up a symbol.
+    DynamicConfig 			 m_config;
+    const DynamicConfig 	*m_external_config;
 };
 
 }
